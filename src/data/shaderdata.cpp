@@ -26,7 +26,7 @@
 #include <future>
 #include <iostream>
 #include <sstream>
-#include "util/jsonrequest.hpp"
+#include "util/jsonfilereader.h"
 
 std::string ShaderDataRecord::ToolTip() const
 {
@@ -42,7 +42,7 @@ std::vector<ShaderDataRecord> ShaderDataManager::LoadFile(const std::string& fil
     std::vector<ShaderDataRecord> local;
     try
     {
-        JsonRequest request(filepath, false);
+        JsonFileReader request(filepath, false);
         if (!request.bValid) return local;
 
         auto& data = request.data;
