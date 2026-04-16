@@ -167,3 +167,8 @@ else()
                                                   ${QT_V}::Widgets ${QT_EXTRA_WIDGET})
 
 endif()
+
+option(BUILD_CLI "Build the headless CLI binary" ON)
+if(BUILD_CLI)
+    add_subdirectory(src/headless)
+endif()
