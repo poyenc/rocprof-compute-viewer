@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 #include "json/include/nlohmann/json.hpp"
+#include "jsonfilereader.h"
 #include "memtracker.h"
 
 //! Class containing a string to be parsed by WaveReader. Can be requested by disk or network.
@@ -48,13 +49,12 @@ protected:
 };
 
 //! Requests a json file by disk or network, depending on path
-class JsonRequest : public StreamRequest
+class JsonRequest : public StreamRequest, public JsonFileReader
 {
     Q_OBJECT
     set_tracked();
 
 public:
     JsonRequest(const std::string& path, bool bWarn = true);
-    bool bValid = false;
-    nlohmann::json data;
+    // bValid and data are inherited from JsonFileReader
 };
