@@ -21,7 +21,7 @@ As a prerequisite, refactor the existing data-loading classes to decouple them f
 - Reimplementing RCV's analysis logic in Python or any other language
 - Modifying the existing GUI binary's user-facing behavior
 - Designing the end-to-end AI optimization loop
-- Cross-invocation caching in the CLI (single-command-per-process is sufficient for v1)
+- Disk-based caching (OS page cache + interactive mode's in-memory cache is sufficient)
 
 ## Architecture
 
@@ -116,8 +116,18 @@ The refactored classes drop static singleton/cache patterns in the shared base. 
 
 ### Invocation
 
+Two modes: single-command and interactive.
+
+**Single-command mode** (one process per command):
+
 ```
 rocprof-compute-viewer-cli <command> [options] <ui_output_dir>
+```
+
+**Interactive mode** (long-lived process, in-memory caching):
+
+```
+rocprof-compute-viewer-cli --interactive <ui_output_dir>
 ```
 
 ### Global Options
@@ -126,6 +136,7 @@ rocprof-compute-viewer-cli <command> [options] <ui_output_dir>
 |--------|-------------|
 | `--help` | Print usage and exit |
 | `--version` | Print version string (from Qt-free `version.h`) and exit |
+| `--interactive` | Enter interactive mode (see below) |
 | `--limit N` | Max items in primary output array (default: all) |
 | `--offset N` | Skip first N items (default: 0) |
 
@@ -161,6 +172,67 @@ rocprof-compute-viewer-cli counters ./ui_output_agent_0_dispatch_42/ --list
 # Wave traces for a specific CU, paged
 rocprof-compute-viewer-cli waves ./ui_output_agent_0_dispatch_42/ --se 0 --cu 3 --limit 10
 ```
+
+## Interactive Mode and Caching
+
+### Motivation
+
+An AI agent workflow is sequential — `info` → `isa` → `latency` → `counters` — all on the same `ui_output` directory. In single-command mode, each invocation re-parses the same JSON files (manifest, code, wave data). Interactive mode keeps the process alive so parsed data stays in memory across commands.
+
+This is the same pattern used by language servers (LSP), MCP servers, and `sqlite3` interactive mode: long-lived process, commands over stdin, results on stdout.
+
+### Protocol
+
+```
+$ rocprof-compute-viewer-cli --interactive ./ui_output_agent_0_dispatch_42/
+> info
+{"version":"1.0.0","command":"info","ui_output_dir":"...","data":{...}}
+> isa --min-cycles 100 --limit 50
+{"version":"1.0.0","command":"isa","ui_output_dir":"...","pagination":{...},"data":{...}}
+> latency --type vmem
+{"version":"1.0.0","command":"latency","ui_output_dir":"...","data":{...}}
+> quit
+```
+
+- One command per line on stdin, same syntax as single-command arguments (minus the `ui_output_dir` which is fixed at startup)
+- One JSON response per line on stdout (compact, no pretty-printing — newline-delimited JSON)
+- Errors on stderr as JSON (same format as single-command mode)
+- `quit` or EOF exits the process
+- Pipe-friendly: `echo -e "info\nisa\nlatency --type vmem" | rcv-cli --interactive ./ui_output/`
+
+### Caching Strategy
+
+Interactive mode uses lazy, in-memory caching:
+
+| Data | When cached | Scope |
+|------|------------|-------|
+| `filenames.json` (manifest) | On startup | Entire session |
+| `code.json` (instruction table) | First command that needs it (`isa`, `latency`) | Entire session |
+| Wave files | First `waves` command for each SE/SIMD/slot | Entire session |
+| Perfcounter data | First `latency`, `counters`, or `perfcounters` command per SE | Entire session |
+| `occupancy.json` | First `occupancy` command | Entire session |
+| Derived counter tensors | First `counters` evaluation | Entire session, cleared if `--definitions` changes |
+
+Parsed data is never written to disk. The cache lives only for the duration of the interactive session. Single-command mode has no caching (process exits after one command).
+
+### Implementation
+
+A `SessionCache` class holds shared pointers to parsed data:
+
+```cpp
+struct SessionCache {
+    nlohmann::json manifest;                              // filenames.json
+    std::vector<CodeData> code;                           // code.json
+    std::map<std::string, std::shared_ptr<WaveData>> waves; // keyed by file path
+    std::map<int, std::vector<PerfDataEntry>> perfdata;   // keyed by SE number
+    nlohmann::json occupancy;                             // occupancy.json
+    bool manifest_loaded = false;
+    bool code_loaded = false;
+    // ...
+};
+```
+
+Each `cmd_*` handler receives a `SessionCache&`. In single-command mode, it's a fresh instance (no reuse). In interactive mode, the same instance is passed to all commands in the session.
 
 ## JSON Output Schema
 
@@ -340,3 +412,5 @@ Contents: command reference, usage examples, agent conventions (JSON stdout, exi
 8. **Existing precedent** — `tests/latency/latency_cli.cpp` proves `LatencyAnalyzer` works as a standalone Qt-free CLI. Its utility functions (`loadJson`, `loadCodeMap`, `loadCounterNames`) are reusable reference implementations. The headless CLI generalizes this pattern.
 
 9. **Subdirectory CMake target** — `src/headless/CMakeLists.txt` is included via `add_subdirectory` from the root. Gets `version.h` for free, avoids AUTOMOC by setting it OFF in subdirectory scope. Mirrors the pattern used by `tests/`.
+
+10. **Interactive mode with in-memory caching** — Instead of disk-based caching, the CLI supports `--interactive` mode where it stays alive and accepts commands on stdin. Parsed data (manifest, code, waves, perfcounters) is cached in memory across commands within a session. This follows the established pattern of LSP servers, MCP servers, and `sqlite3`. No cache invalidation complexity, no extra disk I/O. Single-command mode remains available for simple one-off queries.
