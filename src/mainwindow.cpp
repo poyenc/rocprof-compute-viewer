@@ -493,7 +493,7 @@ void MainWindow::SetMainWave(int se, int simd, int sl, int wid)
 
     auto thread_wait = std::async(
         std::launch::async,
-        [this, main_wave]() { this->code_contents->connector->buildWaitConnections(main_wave->waitcnt); }
+        [this, main_wave]() { this->code_contents->connector->buildWaitConnections(main_wave->gui_waitcnt); }
     );
     auto thread_branch = std::async(
         std::launch::async,
@@ -501,8 +501,8 @@ void MainWindow::SetMainWave(int se, int simd, int sl, int wid)
         { this->code_contents->connector->buildBranchConnections(main_wave->get_branch_targets()); }
     );
 
-    ui->wview_range_min->setText(std::to_string(main_wave->wave_begin).c_str());
-    ui->wview_range_max->setText(std::to_string(main_wave->wave_end + WAVE_END_ROOM).c_str());
+    ui->wview_range_min->setText(std::to_string(main_wave->WaveBegin()).c_str());
+    ui->wview_range_max->setText(std::to_string(main_wave->WaveEnd() + WAVE_END_ROOM).c_str());
 
     UpdateWaveViewRange();
     force_gather = false;
@@ -1556,7 +1556,7 @@ void MainWindow::GatherWaves()
 
                 auto instance = WaveInstance::Get(GetUIDir() + std::string(wid_data[0]));
                 utilization_content->AddTokens(simd_value, instance->tokens);
-                waves[instance->wave_begin] = instance;
+                waves[instance->WaveBegin()] = instance;
                 if (gathered_cu < 0 && instance->cu >= 0) gathered_cu = instance->cu;
             }
             if (!waves.size()) continue;

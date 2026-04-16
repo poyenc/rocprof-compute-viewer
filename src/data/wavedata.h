@@ -22,6 +22,12 @@
 
 #pragma once
 
+#include "code/codeload.hpp"
+#include <cstdint>
+#include <map>
+#include <string>
+#include <vector>
+
 struct occupancy_data
 {
     int64_t time{0};
@@ -44,4 +50,51 @@ struct occupancy_data
         occ.kernel_id = (int) v[5];
         return occ;
     };
+};
+
+struct WaveInstruction
+{
+    int64_t clock{0};
+    int type{0};
+    int stall{0};
+    int cycles{0};
+    int code_line{0};
+};
+
+struct WaitCntEntry
+{
+    int code_line{0};
+    std::vector<std::pair<int, int>> sources;
+};
+
+struct WaveInfoEntry
+{
+    std::string name;
+    int64_t value{0};
+    int64_t stalls{0};
+};
+
+struct TimelineEntry
+{
+    int64_t clock{0};
+    int duration{0};
+    int state{0};
+};
+
+struct WaveData
+{
+    int64_t wave_begin{0};
+    int64_t wave_end{0};
+    int cu{-1};
+    int wave_id{-1};
+    std::string path;
+
+    std::vector<CodeData> code;
+    std::vector<WaveInstruction> instructions;
+    std::vector<TimelineEntry> timeline;
+    std::vector<WaitCntEntry> waitcnt;
+    std::vector<WaveInfoEntry> wave_info;
+    std::map<int, std::vector<int64_t>> line_to_clock;
+
+    bool Load(const std::string& filepath);
 };

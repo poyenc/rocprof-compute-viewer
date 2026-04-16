@@ -27,16 +27,12 @@
 #include <utility>
 #include <vector>
 #include "code/codeload.hpp"
+#include "data/wavedata.h"
 #include "graphics/canvas.h"
 #include "util/custom_layouts.h"
 #include "wave/token.h"
 
-struct WaveInfo
-{
-    std::string name;
-    int64_t value;
-    int64_t stalls;
-};
+using WaveInfo = WaveInfoEntry;
 
 struct TokenGroup
 {
@@ -64,21 +60,15 @@ struct TokenGroup
     void SetMipN(const std::vector<TokenArray>& array, size_t M);
 };
 
-struct WaveInstance : public TokenGroup
+struct WaveInstance : public WaveData, public TokenGroup
 {
     WaveInstance(const std::string& path);
     virtual ~WaveInstance();
 
-    std::vector<CodeData> code;
-    std::vector<Canvas::WaitList> waitcnt;
-    std::vector<WaveInfo> wave_info;
-    std::string path;
-    int cu = -1;
+    std::vector<Canvas::WaitList> gui_waitcnt;
 
-    std::map<int, std::vector<int64_t>> line_to_clock{};
-
-    int64_t WaveBegin() const { return wave_begin; }
-    int64_t WaveEnd() const { return wave_end; }
+    int64_t WaveBegin() const { return WaveData::wave_begin; }
+    int64_t WaveEnd() const { return WaveData::wave_end; }
 
     std::vector<Canvas::WaitList> get_branch_targets() const;
 

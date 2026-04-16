@@ -216,80 +216,67 @@ void TokenGroup::Draw(class QPainter& painter, int64_t viewstart, int64_t viewen
     painter.setPen(pen);
 }
 
-WaveInstance::WaveInstance(const std::string& _path) : path(_path)
+WaveInstance::WaveInstance(const std::string& _path)
 {
-    JsonRequest json(path);
-    nlohmann::json& data = json.data;
+    // Step 1: Load all data via Qt-free WaveData::Load
+    WaveData::Load(_path);
 
-    auto& instructions = data["wave"]["instructions"];
-    int wave_id = data["wave"]["id"];
-
-    std::string version = "";
-    try
-    {
-        version = std::string(data["version"]);
-    }
-    catch (...)
-    {}
-
-    bool isIdleInfo = true;
-    code = CodeData::LoadCode(path.substr(0, path.rfind("se")) + "code.json");
-
+    // Step 2: Build Token objects from instructions
     std::array<int64_t, 4> prev_clock{};
     std::array<int64_t, 4> last_clock{};
 
-    for (auto& inst : instructions)
+    for (auto& wi : this->instructions)
     {
-        int stall = int(inst[2]);
-
         Token token{};
-        token.clock = int64_t(inst[0]);
-        token.cycles = std::max(stall, int(inst[3]));
-        token.stall = (int16_t) stall;
-        token.type = (int16_t) inst[1];
-        token.code_line = (int) inst[4];
+        token.clock = wi.clock;
+        token.cycles = wi.cycles;
+        token.stall = (int16_t) wi.stall;
+        token.type = (int16_t) wi.type;
+        token.code_line = wi.code_line;
 
-        while (prev_clock.at(token.slot) == token.clock && last_clock.at(token.slot) > token.clock && token.slot < 3)
+        while (prev_clock.at(token.slot) == token.clock &&
+               last_clock.at(token.slot) > token.clock && token.slot < 3)
             token.slot++;
 
         prev_clock.at(token.slot) = token.clock;
-        last_clock.at(token.slot) = std::max(last_clock.at(token.slot), token.clock + token.cycles);
+        last_clock.at(token.slot) = std::max(last_clock.at(token.slot),
+                                              token.clock + token.cycles);
 
         tokens.emplace_back(std::move(token));
     }
     tokens.Compile();
 
+    // Step 3: Build code_line_map and process exec data
     std::vector<int> code_line_map;
     for (size_t i = 0; i < code.size(); i++)
     {
         int index = code.at(i).line->index;
-
         if (code_line_map.size() <= index) code_line_map.resize(index + 1);
         code_line_map.at(index) = i;
     }
 
-    this->wave_begin = int64_t(data["wave"]["begin"]);
-    this->wave_end = int64_t(data["wave"]["end"]);
-
-    if (data["wave"].contains("cu")) this->cu = int(data["wave"]["cu"]);
+    // Set TokenGroup's wave_begin/wave_end from WaveData
+    TokenGroup::wave_begin = WaveData::wave_begin;
+    TokenGroup::wave_end = WaveData::wave_end;
 
     int thrownLine = 0;
     int64_t maxtime = 0;
-    int64_t prev_token_clock = wave_begin;
+    int64_t prev_token_clock = WaveData::wave_begin;
+    int wave_id_local = this->wave_id;
 
     for (auto& token : tokens)
     {
         token.setOverlapped(token.clock < maxtime);
         maxtime = std::max(maxtime, token.clock + token.cycles);
 
-        line_to_clock[token.code_line].push_back(token.clock);
         try
         {
             CodeData& _code = code.at(code_line_map.at(token.code_line));
-            if (_code.exec == nullptr) _code.exec = std::make_unique<CodeData::Exec>(wave_id);
+            if (_code.exec == nullptr) _code.exec = std::make_unique<CodeData::Exec>(wave_id_local);
             token.setIteration(_code.exec->latency.size());
             _code.exec->clock.push_back(token.clock);
             _code.exec->latency.push_back(token.cycles);
+            bool isIdleInfo = true;
             if (isIdleInfo && token.clock > prev_token_clock)
                 _code.exec->idle.push_back(token.clock - prev_token_clock);
 
@@ -315,52 +302,21 @@ WaveInstance::WaveInstance(const std::string& _path) : path(_path)
             _code.exec->idle.shrink_to_fit();
         }
 
-    for (auto& [_, line] : line_to_clock) line.shrink_to_fit();
-
     QWARNING(thrownLine == 0, "Token referenced invalid code line: " << thrownLine, (void) 0);
 
+    // Step 4: Build TokenGroup timeline from WaveData timeline
+    for (auto& entry : WaveData::timeline)
     {
-        int64_t _clock = wave_begin;
-        for (auto& time : data["wave"]["timeline"])
-        {
-            timeline[_clock] = WaveState{_clock, int(time[1]), int(time[0])};
-            _clock += int(time[1]);
-        }
+        TokenGroup::timeline[entry.clock] = WaveState{entry.clock, entry.duration, entry.state};
     }
 
-    for (auto& array : data["wave"]["waitcnt"])
+    // Step 5: Build Canvas::WaitList from WaveData waitcnt
+    for (auto& entry : WaveData::waitcnt)
     {
-        Canvas::WaitList list = {array[0], {}};
-        for (auto& pair : array[1]) list.sources.push_back({int(pair[0]), int(pair[1])});
-        waitcnt.push_back(std::move(list));
+        gui_waitcnt.push_back(Canvas::WaitList{entry.code_line, entry.sources});
     }
 
-    auto& json_wave_info = data["wave"]["info"];
-
-    std::vector<std::string> info_params;
-    for (auto& [param, value] : json_wave_info.items())
-        if (param.find("_stall") == std::string::npos) info_params.push_back(param);
-
-    for (auto& param : info_params)
-    {
-        int stall_cnt = 0;
-        try
-        {
-            stall_cnt = int(json_wave_info[param + "_stall"]);
-        }
-        catch (...)
-        {}
-
-        try
-        {
-            wave_info.push_back({param, int(json_wave_info[param]), stall_cnt});
-        }
-        catch (std::exception& e)
-        {
-            std::cout << "Warning: Invalid param " << param << std::endl;
-        }
-    }
-
+    // Step 6: Build mipmaps
     SetMipN();
 }
 
