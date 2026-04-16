@@ -23,8 +23,8 @@
 #include "codeload.hpp"
 #include <mutex>
 #include <set>
-#include "config/config.hpp"
-#include "util/jsonrequest.hpp"
+#include "util/jsonfilereader.h"
+#include "util/tokentypemap.h"
 
 std::mutex code_mutex;
 std::string loaded_cache = "";
@@ -45,9 +45,9 @@ std::vector<CodeData> CodeData::LoadCode(const std::string& path)
 
     if (!cache.empty() && loaded_cache == path) return cache;
 
-    JsonRequest coderequest(path);
+    JsonFileReader coderequest(path);
 
-    if (coderequest.fail() || coderequest.bad()) throw std::exception{};
+    if (!coderequest.bValid) throw std::exception{};
 
     cache.clear();
     loaded_cache = path;
@@ -102,7 +102,7 @@ std::vector<CodeData> CodeData::LoadCode(const std::string& path)
              reasons}
         );
 
-        for (auto& [custom_token, custom_type] : Config::CustomTokens())
+        for (auto& [custom_token, custom_type] : TokenTypeMap::defaults())
             if (cache.back().line->inst.find(custom_token) == 0) cache.back().line->custom_type = custom_type;
         i += 1;
     }
