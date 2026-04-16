@@ -4,15 +4,34 @@ project(
     VERSION 0.1.7
     LANGUAGES CXX)
 
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Threads)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+
+option(BUILD_GUI "Build the GUI binary (requires Qt)" ON)
+option(BUILD_CLI "Build the headless CLI binary" ON)
+
+if(CMAKE_BUILD_TYPE STREQUAL "")
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+include_directories(src)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/src)
+
+# Configure version header (needed by both GUI and CLI)
+configure_file("src/util/version.h.in" "src/util/version.h" @ONLY)
+
+# CLI target — no Qt dependency
+if(BUILD_CLI)
+    add_subdirectory(src/headless)
+endif()
+
+# Everything below is GUI-only
+if(NOT BUILD_GUI)
+    return()
+endif()
 
 if(NOT DEFINED QT_VERSION_MAJOR)
     set(QT_VERSION_MAJOR 6)
@@ -34,13 +53,6 @@ if(RCV_DISABLE_OPENGL)
     add_compile_definitions(RCV_DISABLE_OPENGL)
 endif(RCV_DISABLE_OPENGL)
 
-if(CMAKE_BUILD_TYPE STREQUAL "")
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
-include_directories(src)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/src)
-
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" LICENSE_FILE_CONTENT)
 set(LICENSE_HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/collection/license.h")
 configure_file("src/collection/license_data.cpp.in" "src/collection/license_data.cpp" @ONLY)
@@ -49,8 +61,9 @@ set_property(
     APPEND
     PROPERTY CMAKE_CONFIGURE_DEPENDS src/collection/license_data.cpp)
 
-# Configure version header
-configure_file("src/util/version.h.in" "src/util/version.h" @ONLY)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 file(
     GLOB
@@ -166,9 +179,4 @@ else()
     target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads ${QT_V}::Network ${QT_V}::Core ${QT_V}::Gui
                                                   ${QT_V}::Widgets ${QT_EXTRA_WIDGET})
 
-endif()
-
-option(BUILD_CLI "Build the headless CLI binary" ON)
-if(BUILD_CLI)
-    add_subdirectory(src/headless)
 endif()
