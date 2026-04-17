@@ -58,6 +58,25 @@ run_test "occupancy" "$RCV" occupancy "$UIDIR"
 run_test "latency" "$RCV" latency "$UIDIR" --type all
 run_test "counters-list" "$RCV" counters "$UIDIR" --list
 run_test "perfcounters" "$RCV" perfcounters "$UIDIR"
+run_test "summary" "$RCV" summary "$UIDIR"
+run_test "summary-top5" "$RCV" summary "$UIDIR" --top 5
+run_test "isa-sorted" "$RCV" isa "$UIDIR" --sort cycles --top 10
+run_test "counters-builtins" "$RCV" counters "$UIDIR"
+
+echo -n "TEST: counters-no-builtins ... "
+output=$("$RCV" counters "$UIDIR" --no-builtins 2>/dev/null)
+if echo "$output" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert 'version' in d
+assert 'data' in d
+# With --no-builtins and no --definitions, should have message about no counters
+assert 'message' in d['data'] or 'counters' in d['data']
+"; then
+    echo "PASS"; PASS=$((PASS + 1))
+else
+    echo "FAIL"; FAIL=$((FAIL + 1))
+fi
 
 # Interactive mode test
 echo -n "TEST: interactive ... "
