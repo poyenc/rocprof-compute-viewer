@@ -24,6 +24,7 @@
 #include <QMessageBox>
 #include <fstream>
 #include <set>
+#include "analysis/builtin_counters.h"
 #include "container/datanode.h"
 #include "data/wavedata.h"
 #include "mainwindow.h"
@@ -34,14 +35,8 @@ using namespace std;
 
 constexpr size_t kMaxPlotsPerDerived = 10;
 
-static std::vector<std::pair<std::string, int>> UtilTypes = {
-    {"MISC", 100},
-    {"FLAT", 200},
-    {"SCA",  100},
-    {"LDS",  200},
-    {"VMEM", 200}
-};
-static std::vector<std::string> MopsTypes = {"I8", "F8", "F16", "BF16", "F32", "F64", "XF32", "F6F4"};
+static auto& UtilTypes = BuiltinCounters::utilTypes();
+static auto& MopsTypes = BuiltinCounters::mopsTypes();
 
 std::vector<std::string> WavePlotView::state_names = {"Empty", "Idle", "Exec", "Wait", "Stall"};
 
@@ -705,26 +700,5 @@ void DispatchPlotView::LoadOccupancyData(const std::string& filename)
 
 std::string TraceCounterPlotView::getBuiltin() const
 {
-    std::string derived = "_reduce_busy := sum[max[BUSY_CU_CYCLES, axis=TIME], axis=[XCC,SE,CU]] + 1E-6";
-
-    for (auto& [name, mult] : UtilTypes)
-        derived += "\n" + name + "_util := " + std::to_string(mult) + " * sum[ACTIVE_INST_" + name +
-                   ", axis=[XCC,SE,CU]] / _reduce_busy";
-
-    derived += "\n_mfmabusy := sum[VALU_MFMA_BUSY_CYCLES, axis=[XCC,SE,CU]] / _reduce_busy / 4"
-               "\n_valubusy := sum[ACTIVE_INST_VALU, axis=[XCC,SE,CU]] / _reduce_busy\n"
-               "\nVALU_util := 100 * _valubusy"
-               "\nMFMA_util := 100 * _mfmabusy\n"
-               "\nGPUutil := max(LDS_util, VMEM_util, FLAT_util, min(MFMA_util + VALU_util * (1 - _mfmabusy) / (1.7 - "
-               "_mfmabusy), 100))";
-
-    derived += "\n_clock_delta := select[RCLOCK, -1, axis=TIME] - select[RCLOCK, 0, axis=TIME]";
-    derived += "\n_frequency := 1E8 * select[_clock_delta, 0, axis=CU] / select[_clock_delta, 1, axis=CU]";
-    derived += "\n_delta_seconds := min[delta[SCLOCK, axis=TIME]] / _frequency + 1E-13";
-
-    for (const std::string& name : MopsTypes)
-        derived += "\n" + name + "_TFLOPS := 512E-12 * sum[INSTS_VALU_MFMA_MOPS_" + name +
-                   ", axis=[XCC,SE,CU]] / _delta_seconds";
-
-    return derived;
+    return BuiltinCounters::getDefinitions();
 }
