@@ -8,8 +8,6 @@ namespace Headless
 
 int cmdIsa(const HeadlessArgs& args, SessionCache& cache)
 {
-    auto& code = cache.loadCode();
-
     int minCycles = 0;
     std::string minCyclesStr = getOption(args.options, "--min-cycles");
     if (!minCyclesStr.empty()) minCycles = std::stoi(minCyclesStr);
@@ -18,6 +16,21 @@ int cmdIsa(const HeadlessArgs& args, SessionCache& cache)
     int topN = 0;
     std::string topStr = getOption(args.options, "--top");
     if (!topStr.empty()) topN = std::stoi(topStr);
+
+    // Validate sort field before loading data
+    if (!sortField.empty())
+    {
+        static const std::vector<std::string> validFields = {
+            "cycles", "hitcount", "stall", "idle", "pcsamples", "pcstalls"
+        };
+        if (std::find(validFields.begin(), validFields.end(), sortField) == validFields.end())
+        {
+            writeError("Invalid sort field '" + sortField + "'. Valid fields: cycles, hitcount, stall, idle, pcsamples, pcstalls");
+            return 1;
+        }
+    }
+
+    auto& code = cache.loadCode();
 
     // Build filtered instruction list
     nlohmann::json instructions = nlohmann::json::array();

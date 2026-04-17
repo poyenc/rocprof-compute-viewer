@@ -193,7 +193,7 @@ void printHelp()
         << "    --top N             Number of hotspot instructions (default: 10)\n"
         << "  isa:\n"
         << "    --min-cycles N      Filter instructions with cycles >= N\n"
-        << "    --sort FIELD        Sort by: cycles, hitcount, stall, idle, pcsamples\n"
+        << "    --sort FIELD        Sort by: cycles, hitcount, stall, idle, pcsamples, pcstalls\n"
         << "    --top N             Keep only top N instructions (after sort)\n"
         << "  waves:\n"
         << "    --se N              Filter by shader engine\n"
@@ -215,6 +215,8 @@ void printHelp()
         << "    --expr EXPR         Evaluate an expression\n"
         << "    --definitions FILE  Load definitions from file\n"
         << "    --no-builtins       Skip builtin counter definitions\n"
+        << "\n"
+        << "Note: --top is applied before --limit/--offset pagination.\n"
         << std::endl;
 }
 
