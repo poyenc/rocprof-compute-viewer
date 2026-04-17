@@ -13,6 +13,7 @@ add_executable(rocprof-compute-viewer-cli
     cmd_latency.cpp
     cmd_counters.cpp
     cmd_perfcounters.cpp
+    cmd_summary.cpp
     ${CMAKE_SOURCE_DIR}/src/analysis/latency.cpp
     ${CMAKE_SOURCE_DIR}/src/analysis/derived_counter.cpp
     ${CMAKE_SOURCE_DIR}/src/code/codeload.cpp

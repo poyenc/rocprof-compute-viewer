@@ -6,6 +6,7 @@
 #include "cmd_latency.h"
 #include "cmd_occupancy.h"
 #include "cmd_perfcounters.h"
+#include "cmd_summary.h"
 #include "cmd_waves.h"
 #include "json_output.h"
 #include "session_cache.h"
@@ -179,6 +180,7 @@ void printHelp()
         << "\n"
         << "Commands:\n"
         << "  info                  Show session metadata (gfxip, version, counters, etc.)\n"
+        << "  summary               Show performance summary (activity, utilization, TFLOPS, hotspots)\n"
         << "  isa                   Show ISA instructions with hitcounts and cycles\n"
         << "  waves                 Show wave execution data (instructions, timeline, info)\n"
         << "  occupancy             Show occupancy events\n"
@@ -187,8 +189,12 @@ void printHelp()
         << "  counters              Evaluate derived counter expressions\n"
         << "\n"
         << "Command-specific options:\n"
+        << "  summary:\n"
+        << "    --top N             Number of hotspot instructions (default: 10)\n"
         << "  isa:\n"
         << "    --min-cycles N      Filter instructions with cycles >= N\n"
+        << "    --sort FIELD        Sort by: cycles, hitcount, stall, idle, pcsamples\n"
+        << "    --top N             Keep only top N instructions (after sort)\n"
         << "  waves:\n"
         << "    --se N              Filter by shader engine\n"
         << "    --cu N              Filter by compute unit\n"
@@ -208,6 +214,7 @@ void printHelp()
         << "    --list              List available derived counters\n"
         << "    --expr EXPR         Evaluate an expression\n"
         << "    --definitions FILE  Load definitions from file\n"
+        << "    --no-builtins       Skip builtin counter definitions\n"
         << std::endl;
 }
 
@@ -237,6 +244,7 @@ int dispatch(const HeadlessArgs& args)
 
     try
     {
+        if (args.command == "summary") return cmdSummary(args, cache);
         if (args.command == "info") return cmdInfo(args, cache);
         if (args.command == "isa") return cmdIsa(args, cache);
         if (args.command == "waves") return cmdWaves(args, cache);
@@ -275,7 +283,8 @@ int runInteractive(const std::string& uiOutputDir)
 
         try
         {
-            if (cmdArgs.command == "info") cmdInfo(cmdArgs, cache);
+            if (cmdArgs.command == "summary") cmdSummary(cmdArgs, cache);
+            else if (cmdArgs.command == "info") cmdInfo(cmdArgs, cache);
             else if (cmdArgs.command == "isa") cmdIsa(cmdArgs, cache);
             else if (cmdArgs.command == "waves") cmdWaves(cmdArgs, cache);
             else if (cmdArgs.command == "occupancy") cmdOccupancy(cmdArgs, cache);
