@@ -51,11 +51,11 @@ const nlohmann::json& SessionCache::loadOccupancy()
 {
     if (m_occupancyLoaded) return m_occupancy;
 
-    JsonFileReader reader(m_baseDir + "occupancy.json");
-    if (!reader.bValid)
-        throw std::runtime_error("Failed to load occupancy: " + m_baseDir + "occupancy.json");
-
-    m_occupancy = std::move(reader.data);
+    JsonFileReader reader(m_baseDir + "occupancy.json", false);
+    if (reader.bValid)
+        m_occupancy = std::move(reader.data);
+    else
+        m_occupancy = nlohmann::json();
     m_occupancyLoaded = true;
     return m_occupancy;
 }

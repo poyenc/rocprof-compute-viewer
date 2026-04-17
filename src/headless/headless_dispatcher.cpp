@@ -73,10 +73,15 @@ HeadlessArgs parseArgs(int argc, char* argv[])
 
             // Identify which non-option args are values of --flag options
             // (they should NOT be treated as ui_output_dir)
+            // Boolean flags (--list, --no-builtins) don't consume the next arg.
+            static const std::set<std::string> booleanFlags = {
+                "--list", "--no-builtins"
+            };
             std::set<int> optionValues;
             for (int i = 1; i + 1 < static_cast<int>(remaining.size()); ++i)
             {
-                if (remaining[i].substr(0, 2) == "--")
+                if (remaining[i].substr(0, 2) == "--" &&
+                    booleanFlags.find(remaining[i]) == booleanFlags.end())
                     optionValues.insert(i + 1);
             }
 
