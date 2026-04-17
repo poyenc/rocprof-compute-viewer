@@ -1,4 +1,4 @@
-# rocprof-compute-viewer-cli
+# rcv
 
 Headless CLI for analyzing GPU thread trace data from `rocprofv3`. Outputs structured JSON to stdout, suitable for both human inspection and programmatic consumption by AI agents.
 
@@ -9,10 +9,10 @@ No Qt dependency. Builds and runs on headless servers.
 ```bash
 # Build
 cmake -B build -DBUILD_CLI=ON -DBUILD_GUI=OFF
-cmake --build build --target rocprof-compute-viewer-cli
+cmake --build build --target rcv
 
 # Point at a rocprofv3 ui_output directory
-rcv-cli summary ./ui_output_agent_0_dispatch_42/
+rcv summary ./ui_output_agent_0_dispatch_42/
 ```
 
 ## Commands
@@ -22,8 +22,8 @@ rcv-cli summary ./ui_output_agent_0_dispatch_42/
 Single-shot performance overview. Start here.
 
 ```bash
-rcv-cli summary ./ui_output/
-rcv-cli summary --top 20 ./ui_output/     # more hotspots
+rcv summary ./ui_output/
+rcv summary --top 20 ./ui_output/     # more hotspots
 ```
 
 Output includes:
@@ -40,7 +40,7 @@ Utilization and throughput require perfcounter data in the trace. If absent, onl
 Session metadata.
 
 ```bash
-rcv-cli info ./ui_output/
+rcv info ./ui_output/
 ```
 
 Returns gfxip, counter names, wave count, and feature flags (pc_sampling, thread_trace).
@@ -50,10 +50,10 @@ Returns gfxip, counter names, wave count, and feature flags (pc_sampling, thread
 ISA instruction table with per-instruction metrics.
 
 ```bash
-rcv-cli isa ./ui_output/                              # all instructions
-rcv-cli isa --sort cycles --top 20 ./ui_output/       # top 20 hotspots
-rcv-cli isa --min-cycles 1000 ./ui_output/            # filter by cycle count
-rcv-cli isa --sort hitcount --top 10 ./ui_output/     # most-executed instructions
+rcv isa ./ui_output/                              # all instructions
+rcv isa --sort cycles --top 20 ./ui_output/       # top 20 hotspots
+rcv isa --min-cycles 1000 ./ui_output/            # filter by cycle count
+rcv isa --sort hitcount --top 10 ./ui_output/     # most-executed instructions
 ```
 
 Each instruction includes: index, opcode, address, source mapping, hitcount, cycles, idle, stall, pcsamples, pcstalls.
@@ -65,8 +65,8 @@ Valid `--sort` fields: `cycles`, `hitcount`, `stall`, `idle`, `pcsamples`, `pcst
 Per-wave instruction traces with clock-level timing.
 
 ```bash
-rcv-cli waves --se 0 --cu 3 --limit 5 ./ui_output/
-rcv-cli waves --se 0 --simd 0 --limit 1 ./ui_output/
+rcv waves --se 0 --cu 3 --limit 5 ./ui_output/
+rcv waves --se 0 --simd 0 --limit 1 ./ui_output/
 ```
 
 Each wave includes instructions (clock, type, stall, cycles, code_line), timeline (state durations), and info (per-type summaries).
@@ -76,10 +76,10 @@ Each wave includes instructions (clock, type, stall, cycles, code_line), timelin
 Per-instruction memory latency statistics. Correlates wave instruction issue times with perfcounter level samples.
 
 ```bash
-rcv-cli latency --type vmem ./ui_output/              # VMEM latency (default)
-rcv-cli latency --type lds ./ui_output/               # LDS latency
-rcv-cli latency --type smem ./ui_output/              # SMEM latency
-rcv-cli latency --type vmem --cu 3 --se 0,1 ./ui_output/
+rcv latency --type vmem ./ui_output/              # VMEM latency (default)
+rcv latency --type lds ./ui_output/               # LDS latency
+rcv latency --type smem ./ui_output/              # SMEM latency
+rcv latency --type vmem --cu 3 --se 0,1 ./ui_output/
 ```
 
 Returns per-instruction statistics: mean, stddev, error, count, mean_issue, mean_stall.
@@ -89,11 +89,11 @@ Returns per-instruction statistics: mean, stddev, error, count, mean_issue, mean
 Derived counter expression engine. Evaluates builtin and user-defined expressions over 4D tensors (XCC, SE, CU, Time).
 
 ```bash
-rcv-cli counters ./ui_output/                         # evaluate all builtins
-rcv-cli counters --list ./ui_output/                  # list available counters
-rcv-cli counters --expr "mean[VALU_util]" ./ui_output/
-rcv-cli counters --definitions my_counters.def ./ui_output/
-rcv-cli counters --no-builtins --definitions custom.def ./ui_output/
+rcv counters ./ui_output/                         # evaluate all builtins
+rcv counters --list ./ui_output/                  # list available counters
+rcv counters --expr "mean[VALU_util]" ./ui_output/
+rcv counters --definitions my_counters.def ./ui_output/
+rcv counters --no-builtins --definitions custom.def ./ui_output/
 ```
 
 Builtins include utilization percentages (VALU_util, MFMA_util, GPUutil, etc.) and TFLOPS throughput per datatype.
@@ -110,8 +110,8 @@ Available functions: `mean`, `max`, `min`, `sum` (with axis), `select`, `remove`
 Raw hardware counter samples per shader engine.
 
 ```bash
-rcv-cli perfcounters ./ui_output/
-rcv-cli perfcounters --se 0 ./ui_output/
+rcv perfcounters ./ui_output/
+rcv perfcounters --se 0 ./ui_output/
 ```
 
 ### occupancy
@@ -119,8 +119,8 @@ rcv-cli perfcounters --se 0 ./ui_output/
 Wave occupancy events (launch/retire).
 
 ```bash
-rcv-cli occupancy ./ui_output/
-rcv-cli occupancy --se 0 --cu 3 ./ui_output/
+rcv occupancy ./ui_output/
+rcv occupancy --se 0 --cu 3 ./ui_output/
 ```
 
 ## Output Format
@@ -157,7 +157,7 @@ Exit code 0 on success, non-zero on failure.
 For multi-command sessions (avoids re-parsing data files):
 
 ```bash
-rcv-cli --interactive ./ui_output/
+rcv --interactive ./ui_output/
 ```
 
 Protocol: one command per line on stdin, one compact JSON response per line on stdout. Parsed data is cached in memory across commands.
@@ -174,7 +174,7 @@ Protocol: one command per line on stdin, one compact JSON response per line on s
 
 Pipe-friendly:
 ```bash
-echo -e "summary\nisa --sort cycles --top 10\nquit" | rcv-cli -i ./ui_output/
+echo -e "summary\nisa --sort cycles --top 10\nquit" | rcv -i ./ui_output/
 ```
 
 ## Agent Kernel Optimization Loop
@@ -186,28 +186,28 @@ Typical workflow for an AI agent optimizing a HIP kernel:
 rocprofv3 --thread-trace -- ./my_kernel
 
 # 2. Quick assessment: compute-bound or memory-bound?
-rcv-cli summary ./ui_output/
+rcv summary ./ui_output/
 # Check: MFMA_util vs VMEM_util, stall_pct, GPU utilization
 
 # 3. Find instruction bottlenecks
-rcv-cli isa --sort cycles --top 10 ./ui_output/
+rcv isa --sort cycles --top 10 ./ui_output/
 # Identify which instructions consume the most cycles
 
 # 4. Deep dive on memory latency (if memory-bound)
-rcv-cli latency --type vmem ./ui_output/
+rcv latency --type vmem ./ui_output/
 # Per-instruction VMEM latency: mean, stddev, count
 
 # 5. Check achieved throughput
-rcv-cli counters --expr "F16_TFLOPS" ./ui_output/
+rcv counters --expr "F16_TFLOPS" ./ui_output/
 
 # 6. Edit kernel, re-profile, compare summaries
-rcv-cli summary ./ui_output_v2/
+rcv summary ./ui_output_v2/
 ```
 
 For multi-query sessions, use interactive mode to avoid repeated file parsing:
 
 ```bash
-rcv-cli -i ./ui_output/ <<'EOF'
+rcv -i ./ui_output/ <<'EOF'
 summary
 isa --sort cycles --top 10
 latency --type vmem
@@ -247,7 +247,7 @@ The CLI reads `ui_output` directories produced by `rocprofv3` thread trace colle
 ```bash
 # CLI only (no Qt required)
 cmake -B build -DBUILD_CLI=ON -DBUILD_GUI=OFF
-cmake --build build --target rocprof-compute-viewer-cli
+cmake --build build --target rcv
 
 # Both GUI and CLI
 cmake -B build -DBUILD_CLI=ON -DBUILD_GUI=ON

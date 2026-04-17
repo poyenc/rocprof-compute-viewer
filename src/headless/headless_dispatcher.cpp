@@ -168,7 +168,7 @@ bool hasFlag(const std::vector<std::string>& options, const std::string& flag)
 void printHelp()
 {
     std::cerr
-        << "Usage: rocprof-compute-viewer-cli [global-options] <command> [command-options] <ui_output_dir>\n"
+        << "Usage: rcv [global-options] <command> [command-options] <ui_output_dir>\n"
         << "\n"
         << "Global options:\n"
         << "  --version, -v         Print version and exit\n"
@@ -225,7 +225,7 @@ int dispatch(const HeadlessArgs& args)
     if (args.version)
     {
         auto& v = Version::Get();
-        std::cout << "rocprof-compute-viewer-cli " << v.viewer_major << "." << v.viewer_minor << "." << v.viewer_rev
+        std::cout << "rcv " << v.viewer_major << "." << v.viewer_minor << "." << v.viewer_rev
                   << std::endl;
         return 0;
     }

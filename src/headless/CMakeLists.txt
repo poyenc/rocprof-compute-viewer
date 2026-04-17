@@ -2,7 +2,7 @@ set(CMAKE_AUTOMOC OFF)
 set(CMAKE_AUTOUIC OFF)
 set(CMAKE_AUTORCC OFF)
 
-add_executable(rocprof-compute-viewer-cli
+add_executable(rcv
     main.cpp
     headless_dispatcher.cpp
     session_cache.cpp
@@ -22,13 +22,13 @@ add_executable(rocprof-compute-viewer-cli
     ${CMAKE_SOURCE_DIR}/src/util/jsonfilereader.cpp
 )
 
-target_include_directories(rocprof-compute-viewer-cli PRIVATE
+target_include_directories(rcv PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/json/include
     ${CMAKE_BINARY_DIR}/src
 )
 
-target_link_libraries(rocprof-compute-viewer-cli PRIVATE Threads::Threads)
-target_compile_features(rocprof-compute-viewer-cli PRIVATE cxx_std_20)
+target_link_libraries(rcv PRIVATE Threads::Threads)
+target_compile_features(rcv PRIVATE cxx_std_20)
 
-install(TARGETS rocprof-compute-viewer-cli DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS rcv DESTINATION ${CMAKE_INSTALL_BINDIR})

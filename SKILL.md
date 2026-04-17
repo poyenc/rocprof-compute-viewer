@@ -3,7 +3,7 @@ name: "rcv-headless"
 description: "Headless CLI for rocprof-compute-viewer. Analyzes GPU thread trace data from rocprofv3 and outputs results as JSON."
 ---
 
-# rocprof-compute-viewer-cli
+# rcv
 
 Command-line interface for analyzing GPU thread trace data without a GUI.
 
@@ -11,12 +11,12 @@ Command-line interface for analyzing GPU thread trace data without a GUI.
 
 Single command:
 ```
-rocprof-compute-viewer-cli <command> [options] <ui_output_dir>
+rcv <command> [options] <ui_output_dir>
 ```
 
 Interactive mode (in-memory caching across commands):
 ```
-rocprof-compute-viewer-cli --interactive <ui_output_dir>
+rcv --interactive <ui_output_dir>
 ```
 
 ## Commands

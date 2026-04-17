@@ -47,7 +47,7 @@ echo -n "TEST: unknown-command ... "
 if "$RCV" bogus "$UIDIR" 2>/dev/null; then echo "FAIL"; FAIL=$((FAIL + 1)); else echo "PASS"; PASS=$((PASS + 1)); fi
 
 echo -n "TEST: version ... "
-if "$RCV" --version 2>/dev/null | grep -q "rocprof-compute-viewer-cli"; then echo "PASS"; PASS=$((PASS + 1)); else echo "FAIL"; FAIL=$((FAIL + 1)); fi
+if "$RCV" --version 2>/dev/null | grep -q "rcv"; then echo "PASS"; PASS=$((PASS + 1)); else echo "FAIL"; FAIL=$((FAIL + 1)); fi
 
 # Command tests
 run_test "info" "$RCV" info "$UIDIR"
