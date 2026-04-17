@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "cmd_isa.h"
 #include "json_output.h"
+#include <algorithm>
 
 namespace Headless
 {
@@ -12,6 +13,11 @@ int cmdIsa(const HeadlessArgs& args, SessionCache& cache)
     int minCycles = 0;
     std::string minCyclesStr = getOption(args.options, "--min-cycles");
     if (!minCyclesStr.empty()) minCycles = std::stoi(minCyclesStr);
+
+    std::string sortField = getOption(args.options, "--sort");
+    int topN = 0;
+    std::string topStr = getOption(args.options, "--top");
+    if (!topStr.empty()) topN = std::stoi(topStr);
 
     // Build filtered instruction list
     nlohmann::json instructions = nlohmann::json::array();
@@ -39,6 +45,21 @@ int cmdIsa(const HeadlessArgs& args, SessionCache& cache)
         }
 
         instructions.push_back(std::move(inst));
+    }
+
+    // Apply sorting
+    if (!sortField.empty())
+    {
+        std::sort(instructions.begin(), instructions.end(),
+            [&sortField](const nlohmann::json& a, const nlohmann::json& b) {
+                return a.value(sortField, 0) > b.value(sortField, 0);
+            });
+    }
+
+    // Apply top-N (before pagination)
+    if (topN > 0 && topN < static_cast<int>(instructions.size()))
+    {
+        instructions.erase(instructions.begin() + topN, instructions.end());
     }
 
     int total = static_cast<int>(instructions.size());
