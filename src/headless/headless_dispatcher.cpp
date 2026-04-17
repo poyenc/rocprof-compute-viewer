@@ -12,6 +12,7 @@
 #include "util/version.h"
 
 #include <iostream>
+#include <set>
 #include <sstream>
 
 namespace Headless
@@ -56,35 +57,50 @@ HeadlessArgs parseArgs(int argc, char* argv[])
         }
     }
 
-    // Second pass: command is the first non-option arg,
-    // last non-option arg without -- prefix is ui_output_dir,
-    // everything else is command options.
+    // Second pass: parse remaining args
     if (!remaining.empty())
     {
-        // First remaining arg is the command
-        args.command = remaining[0];
-
-        // Find the last arg that doesn't start with '--' to use as ui_output_dir
-        int lastNonOption = -1;
-        for (int i = static_cast<int>(remaining.size()) - 1; i >= 1; --i)
+        if (args.interactive)
         {
-            if (remaining[i].substr(0, 2) != "--")
+            // Interactive mode: remaining args are just the ui_output_dir
+            args.uiOutputDir = remaining.back();
+        }
+        else
+        {
+            // Non-interactive: first remaining arg is the command
+            args.command = remaining[0];
+
+            // Identify which non-option args are values of --flag options
+            // (they should NOT be treated as ui_output_dir)
+            std::set<int> optionValues;
+            for (int i = 1; i + 1 < static_cast<int>(remaining.size()); ++i)
             {
-                lastNonOption = i;
-                break;
+                if (remaining[i].substr(0, 2) == "--")
+                    optionValues.insert(i + 1);
             }
-        }
 
-        if (lastNonOption > 0)
-        {
-            args.uiOutputDir = remaining[lastNonOption];
-        }
+            // Find the last arg that is a standalone non-option (not a --flag value)
+            int lastNonOption = -1;
+            for (int i = static_cast<int>(remaining.size()) - 1; i >= 1; --i)
+            {
+                if (remaining[i].substr(0, 2) != "--" && optionValues.find(i) == optionValues.end())
+                {
+                    lastNonOption = i;
+                    break;
+                }
+            }
 
-        // Everything else between command and ui_output_dir is options
-        for (int i = 1; i < static_cast<int>(remaining.size()); ++i)
-        {
-            if (i == lastNonOption) continue;
-            args.options.push_back(remaining[i]);
+            if (lastNonOption > 0)
+            {
+                args.uiOutputDir = remaining[lastNonOption];
+            }
+
+            // Everything else between command and ui_output_dir is options
+            for (int i = 1; i < static_cast<int>(remaining.size()); ++i)
+            {
+                if (i == lastNonOption) continue;
+                args.options.push_back(remaining[i]);
+            }
         }
     }
 

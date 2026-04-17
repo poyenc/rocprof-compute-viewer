@@ -23,19 +23,23 @@ int cmdInfo(const HeadlessArgs& args, SessionCache& cache)
     if (manifest.contains("counter_names"))
         data["counter_names"] = manifest["counter_names"];
 
-    // Count waves
+    // Count SEs and waves from wave_filenames
+    int numSe = 0;
     int numWaves = 0;
-    if (manifest.contains("wave_filenames"))
+    if (manifest.contains("wave_filenames") && !manifest["wave_filenames"].is_null())
     {
-        for (auto& [se, simds] : manifest["wave_filenames"].items())
+        auto& wf = manifest["wave_filenames"];
+        numSe = static_cast<int>(wf.size());
+        for (auto& [se, simds] : wf.items())
             for (auto& [simd, slots] : simds.items())
                 for (auto& [slot, waves] : slots.items())
                     numWaves += static_cast<int>(waves.size());
     }
+    data["num_se"] = numSe;
     data["num_waves"] = numWaves;
 
-    // Check for occupancy
-    data["has_occupancy"] = manifest.contains("occupancy") || manifest.contains("occupancy_filenames");
+    // Check for occupancy (occupancy.json is a separate file, check filesystem)
+    data["has_occupancy"] = !cache.loadOccupancy().is_null();
 
     // Check for shaderdata
     data["has_shaderdata"] = manifest.contains("shaderdata_filenames");

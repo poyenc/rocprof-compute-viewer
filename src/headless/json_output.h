@@ -19,6 +19,7 @@ inline void writeJson(
 )
 {
     nlohmann::json envelope;
+    envelope["version"] = "1.0.0";
     envelope["command"] = command;
     envelope["ui_output_dir"] = uiOutputDir;
     envelope["data"] = data;
@@ -44,6 +45,7 @@ inline void writeJsonCompact(
 )
 {
     nlohmann::json envelope;
+    envelope["version"] = "1.0.0";
     envelope["command"] = command;
     envelope["ui_output_dir"] = uiOutputDir;
     envelope["data"] = data;

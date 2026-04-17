@@ -54,7 +54,38 @@ int cmdLatency(const HeadlessArgs& args, SessionCache& cache)
 
     // Load shared data
     auto counterNames = cache.counterNames();
+
+    if (counterNames.empty())
+    {
+        nlohmann::json data;
+        data["counter_type"] = counterName;
+        data["instructions"] = nlohmann::json::array();
+        data["note"] = "No performance counters in this trace. Re-profile with counters enabled.";
+        if (args.compact)
+            writeJsonCompact("latency", args.uiOutputDir, data);
+        else
+            writeJson("latency", args.uiOutputDir, data);
+        return 0;
+    }
+
     auto codeMap = cache.buildCodeMap();
+
+    // Verify counter exists
+    if (!LatencyAnalysis::LatencyAnalyzer::hasCounter(counterNames,
+            counterName == "SQ_INST_LEVEL_VMEM" ? LatencyAnalysis::CounterType::VMEM :
+            counterName == "SQ_INST_LEVEL_LDS" ? LatencyAnalysis::CounterType::LDS :
+            LatencyAnalysis::CounterType::SMEM))
+    {
+        nlohmann::json data;
+        data["counter_type"] = counterName;
+        data["instructions"] = nlohmann::json::array();
+        data["note"] = "Counter " + counterName + " not found in this trace.";
+        if (args.compact)
+            writeJsonCompact("latency", args.uiOutputDir, data);
+        else
+            writeJson("latency", args.uiOutputDir, data);
+        return 0;
+    }
 
     // Create analyzer
     LatencyAnalysis::LatencyAnalyzer analyzer(counterNames, codeMap, counterName, targetCu, perfInterval);
