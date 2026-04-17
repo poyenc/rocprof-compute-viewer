@@ -3,6 +3,7 @@
 #include "analysis/latency.hpp"
 #include "json_output.h"
 
+#include <filesystem>
 #include <sstream>
 
 namespace Headless
@@ -90,15 +91,31 @@ int cmdLatency(const HeadlessArgs& args, SessionCache& cache)
     // Create analyzer
     LatencyAnalysis::LatencyAnalyzer analyzer(counterNames, codeMap, counterName, targetCu, perfInterval);
 
-    // Process each shader engine
+    // Process each shader engine (skip if perfcounter file doesn't exist)
+    bool anyPerfData = false;
     for (int se : shaderEngines)
     {
         std::string perfFile = cache.baseDir() + "se" + std::to_string(se) + "_perfcounter.json";
-        auto waveFilePaths = LatencyAnalysis::LatencyAnalyzer::collectWaveFilePaths(cache.baseDir(), se);
+        if (!std::filesystem::exists(perfFile)) continue;
 
+        auto waveFilePaths = LatencyAnalysis::LatencyAnalyzer::collectWaveFilePaths(cache.baseDir(), se);
         if (waveFilePaths.empty()) continue;
 
         analyzer.analyzeFiles(perfFile, waveFilePaths);
+        anyPerfData = true;
+    }
+
+    if (!anyPerfData)
+    {
+        nlohmann::json data;
+        data["counter_type"] = counterName;
+        data["instructions"] = nlohmann::json::array();
+        data["note"] = "No perfcounter files found. Counter names are declared but data files are missing.";
+        if (args.compact)
+            writeJsonCompact("latency", args.uiOutputDir, data);
+        else
+            writeJson("latency", args.uiOutputDir, data);
+        return 0;
     }
 
     // Get results
