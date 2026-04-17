@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "cmd_counters.h"
+#include "analysis/builtin_counters.h"
 #include "analysis/derived_counter.h"
 #include "counter_tensors.h"
 #include "json_output.h"
@@ -11,6 +12,7 @@ namespace Headless
 int cmdCounters(const HeadlessArgs& args, SessionCache& cache)
 {
     bool listMode = hasFlag(args.options, "--list");
+    bool noBuiltins = hasFlag(args.options, "--no-builtins");
     std::string exprStr = getOption(args.options, "--expr");
     std::string defsFile = getOption(args.options, "--definitions");
 
@@ -18,6 +20,19 @@ int cmdCounters(const HeadlessArgs& args, SessionCache& cache)
 
     // Build raw counter tensors
     buildCounterTensors(cache, mgr);
+
+    // Load builtin definitions (utilization, TFLOPS) unless suppressed
+    if (!noBuiltins)
+    {
+        try
+        {
+            mgr.loadDefinitions(BuiltinCounters::getDefinitions());
+        }
+        catch (const std::exception& e)
+        {
+            // Builtins may fail if required counters are missing — not fatal
+        }
+    }
 
     // Load definitions if specified
     if (!defsFile.empty())
@@ -90,7 +105,7 @@ int cmdCounters(const HeadlessArgs& args, SessionCache& cache)
     if (derived.empty())
     {
         nlohmann::json data;
-        data["message"] = "No derived counters defined. Use --definitions FILE or --expr EXPR.";
+        data["message"] = "No derived counters available. Perfcounter data may be missing.";
         data["raw_counters"] = mgr.context().rawCounterNames();
 
         if (args.compact)
