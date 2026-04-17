@@ -26,14 +26,17 @@ int cmdWaves(const HeadlessArgs& args, SessionCache& cache)
     if (!cuFilterStr.empty()) filterCU = std::stoi(cuFilterStr);
     if (!simdFilterStr.empty()) filterSIMD = std::stoi(simdFilterStr);
 
-    // Collect wave file paths from manifest
+    // Collect wave references from manifest (without loading wave files)
     struct WaveRef
     {
-        std::string path;
+        std::string filename;
+        std::string fullPath;
         int se;
         int simd;
         int slot;
         int waveId;
+        int64_t begin;  // from manifest
+        int64_t end;    // from manifest
     };
     std::vector<WaveRef> waveRefs;
 
@@ -54,100 +57,141 @@ int cmdWaves(const HeadlessArgs& args, SessionCache& cache)
                 for (auto& [waveIdStr, info] : waves.items())
                 {
                     int waveId = std::stoi(waveIdStr);
-                    if (info.size() < 1) continue;
+                    if (info.size() < 3) continue;
 
                     std::string filename = info[0].get<std::string>();
-                    std::string fullPath = cache.baseDir() + filename;
+                    int64_t beginClock = info[1].get<int64_t>();
+                    int64_t endClock = info[2].get<int64_t>();
 
-                    waveRefs.push_back({fullPath, se, simd, slot, waveId});
+                    waveRefs.push_back({
+                        filename,
+                        cache.baseDir() + filename,
+                        se, simd, slot, waveId,
+                        beginClock, endClock
+                    });
                 }
             }
         }
     }
 
-    // Apply CU filter after loading (CU comes from the wave file itself)
+    // Note: CU filter requires loading wave files (CU is inside the wave data).
+    // For CU-filtered queries, we must load waves to check.
+    // For unfiltered queries, we can use manifest data for the summary
+    // and only load wave files within the pagination window.
+
+    int total = static_cast<int>(waveRefs.size());
+    int off = std::max(0, args.offset);
+    int lim = args.limit > 0 ? args.limit : total;
+    off = std::min(off, total);
+    lim = std::min(lim, total - off);
+
     nlohmann::json wavesArray = nlohmann::json::array();
-    for (auto& ref : waveRefs)
+
+    if (filterCU >= 0)
     {
-        try
+        // CU filter: must load all waves to check CU, then paginate
+        std::vector<int> matchingIndices;
+        for (int i = 0; i < total; ++i)
         {
-            auto& wave = cache.loadWave(ref.path);
-
-            if (filterCU >= 0 && wave.cu != filterCU) continue;
-
-            nlohmann::json waveJson;
-            waveJson["se"] = ref.se;
-            waveJson["simd"] = ref.simd;
-            waveJson["slot"] = ref.slot;
-            waveJson["wave_id"] = wave.wave_id;
-            waveJson["cu"] = wave.cu;
-            waveJson["begin"] = wave.wave_begin;
-            waveJson["end"] = wave.wave_end;
-
-            // Instructions
-            nlohmann::json instsJson = nlohmann::json::array();
-            for (auto& inst : wave.instructions)
+            try
             {
-                nlohmann::json ij;
-                ij["clock"] = inst.clock;
-                ij["type"] = inst.type;
-                ij["stall"] = inst.stall;
-                ij["cycles"] = inst.cycles;
-                ij["code_line"] = inst.code_line;
-                instsJson.push_back(std::move(ij));
+                auto& wave = cache.loadWave(waveRefs[i].fullPath);
+                if (wave.cu == filterCU)
+                    matchingIndices.push_back(i);
             }
-            waveJson["instructions"] = std::move(instsJson);
-
-            // Timeline
-            nlohmann::json timelineJson = nlohmann::json::array();
-            for (auto& entry : wave.timeline)
-            {
-                nlohmann::json tj;
-                tj["clock"] = entry.clock;
-                tj["duration"] = entry.duration;
-                tj["state"] = entry.state;
-                timelineJson.push_back(std::move(tj));
-            }
-            waveJson["timeline"] = std::move(timelineJson);
-
-            // Info
-            nlohmann::json infoJson = nlohmann::json::array();
-            for (auto& ie : wave.wave_info)
-            {
-                nlohmann::json ij;
-                ij["name"] = ie.name;
-                ij["value"] = ie.value;
-                ij["stalls"] = ie.stalls;
-                infoJson.push_back(std::move(ij));
-            }
-            waveJson["info"] = std::move(infoJson);
-
-            wavesArray.push_back(std::move(waveJson));
+            catch (...) {}
         }
-        catch (const std::exception& e)
-        {
-            // Skip waves that fail to load
-            continue;
-        }
-    }
 
-    int total = static_cast<int>(wavesArray.size());
-
-    // Apply pagination on the waves array
-    if (args.offset > 0 || args.limit > 0)
-    {
-        int off = std::max(0, args.offset);
-        int lim = args.limit > 0 ? args.limit : total;
+        total = static_cast<int>(matchingIndices.size());
         off = std::min(off, total);
         lim = std::min(lim, total - off);
 
-        nlohmann::json paginated = nlohmann::json::array();
+        for (int j = off; j < off + lim; ++j)
+        {
+            auto& ref = waveRefs[matchingIndices[j]];
+            auto& wave = cache.loadWave(ref.fullPath);
+
+            nlohmann::json wj;
+            wj["se"] = ref.se;
+            wj["simd"] = ref.simd;
+            wj["slot"] = ref.slot;
+            wj["wave_id"] = wave.wave_id;
+            wj["cu"] = wave.cu;
+            wj["begin"] = wave.wave_begin;
+            wj["end"] = wave.wave_end;
+            wj["instruction_count"] = static_cast<int>(wave.instructions.size());
+
+            nlohmann::json instsJson = nlohmann::json::array();
+            for (auto& inst : wave.instructions)
+                instsJson.push_back({{"clock", inst.clock}, {"type", inst.type},
+                                     {"stall", inst.stall}, {"cycles", inst.cycles},
+                                     {"code_line", inst.code_line}});
+            wj["instructions"] = std::move(instsJson);
+
+            nlohmann::json timelineJson = nlohmann::json::array();
+            for (auto& e : wave.timeline)
+                timelineJson.push_back({{"clock", e.clock}, {"duration", e.duration}, {"state", e.state}});
+            wj["timeline"] = std::move(timelineJson);
+
+            nlohmann::json infoJson = nlohmann::json::array();
+            for (auto& ie : wave.wave_info)
+                infoJson.push_back({{"name", ie.name}, {"value", ie.value}, {"stalls", ie.stalls}});
+            wj["info"] = std::move(infoJson);
+
+            wavesArray.push_back(std::move(wj));
+        }
+    }
+    else
+    {
+        // No CU filter: only load wave files within the pagination window
         for (int i = off; i < off + lim; ++i)
-            paginated.push_back(wavesArray[i]);
+        {
+            auto& ref = waveRefs[i];
+            try
+            {
+                auto& wave = cache.loadWave(ref.fullPath);
 
-        nlohmann::json data;
-        data["waves"] = std::move(paginated);
+                nlohmann::json wj;
+                wj["se"] = ref.se;
+                wj["simd"] = ref.simd;
+                wj["slot"] = ref.slot;
+                wj["wave_id"] = wave.wave_id;
+                wj["cu"] = wave.cu;
+                wj["begin"] = wave.wave_begin;
+                wj["end"] = wave.wave_end;
+                wj["instruction_count"] = static_cast<int>(wave.instructions.size());
 
+                nlohmann::json instsJson = nlohmann::json::array();
+                for (auto& inst : wave.instructions)
+                    instsJson.push_back({{"clock", inst.clock}, {"type", inst.type},
+                                         {"stall", inst.stall}, {"cycles", inst.cycles},
+                                         {"code_line", inst.code_line}});
+                wj["instructions"] = std::move(instsJson);
+
+                nlohmann::json timelineJson = nlohmann::json::array();
+                for (auto& e : wave.timeline)
+                    timelineJson.push_back({{"clock", e.clock}, {"duration", e.duration}, {"state", e.state}});
+                wj["timeline"] = std::move(timelineJson);
+
+                nlohmann::json infoJson = nlohmann::json::array();
+                for (auto& ie : wave.wave_info)
+                    infoJson.push_back({{"name", ie.name}, {"value", ie.value}, {"stalls", ie.stalls}});
+                wj["info"] = std::move(infoJson);
+
+                wavesArray.push_back(std::move(wj));
+            }
+            catch (...)
+            {
+                continue;
+            }
+        }
+    }
+
+    nlohmann::json data;
+    data["waves"] = std::move(wavesArray);
+
+    if (args.offset > 0 || args.limit > 0)
+    {
         if (args.compact)
             writeJsonCompact("waves", args.uiOutputDir, data, off, lim, total);
         else
@@ -155,9 +199,6 @@ int cmdWaves(const HeadlessArgs& args, SessionCache& cache)
     }
     else
     {
-        nlohmann::json data;
-        data["waves"] = std::move(wavesArray);
-
         if (args.compact)
             writeJsonCompact("waves", args.uiOutputDir, data);
         else
